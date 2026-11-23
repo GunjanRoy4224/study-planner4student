@@ -152,6 +152,23 @@ OpenJarvis explicitly distinguishes between process supervision and operating-sy
 - SQLite audit logs utilize a cryptographic linear SHA-256 hash chain (`prev_hash`) ensuring tamper evidence.
 - API tokens and secrets in logged parameters are sanitized via regex scrubbing.
 
+### Gate 7: Final Blocker Corrections & Deep Integration
+- **Browser Approval Integrity & TOCTOU:** Text typed into browser inputs is bound via HMAC SHA-256 (`compute_typing_hmac`) and scrubbed (`[REDACTED INPUT]`) in approval storage and user summaries. Pre-execution DOM revalidation confirms tag name, type, action, method, and text digest immediately prior to execution, blocking time-of-check to time-of-use element replacement.
+- **SSRF Proxy Bounded Resources:** Non-blocking semaphore acquisition (`acquire(blocking=False)`) prevents thread pool exhaustion and queues. Concurrency violations return bounded HTTP 503 Service Unavailable. Active sockets are tracked and actively closed on proxy shutdown.
+- **Docker Mount & Network Restriction:** Default network mode is `none` (rejects `bridge` unless approved). Default mounts are read-only; writable mounts require explicit `_APPROVED_WRITABLE_MOUNTS` allowlist. Empty allowlist fails closed when mounts are requested. Sensitive directories and Docker daemon sockets trigger immediate rejection before allowlist checks.
+- **MCP Schema Trust Persistence:** Schema fingerprints are written atomically via temporary files and `os.replace`. Storage corruption resets gracefully. Unapproved tools or mutating keywords strictly require user confirmation, preventing constructor overrides. Secret-tainted parameters are blocked before execution.
+- **Windows Job Object Supervision Demarcation:** Honest classification distinguishes process supervision (`isolation_type="job_object"`) from container isolation (`isolation_type="docker"`). Untrusted arbitrary code execution on Windows requires verified Docker; host Job Object execution requires explicit user authorization (`trusted=True` or `allow_host_job_object=True`).
+- **Audit Persistence Fail-Closed:** Consequential tools (`file_write`, `apply_patch`, `shell_exec`, `docker_shell_exec`, `code_interpreter`, `browser_*`, `mcp_*`) verify mandatory audit logging and fail closed with a security exception if audit persistence throws.
+
+### Gate 8: Lightweight Windows Security Diagnostics
+- **Diagnostic Tool:** New tool `windows_security_diagnostics` provides comprehensive read-only security visibility:
+  - Windows Defender real-time monitoring and threat history inspection.
+  - QuickScan trigger capabilities.
+  - Windows Firewall active profile and rule inspection.
+  - System inspection: running processes, listening TCP/UDP ports, and startup persistence registry keys.
+  - Security utilities audit: detects Microsoft Sysinternals (Procmon, TCPView, Autoruns), MSERT, and ClamAV.
+- **Policy Enforcement:** Read-only diagnostics operate autonomously (`ALLOW`), while remediation actions strictly require human approval (`REQUIRE_APPROVAL`).
+
 ---
 
 ## 6. Verification, Installation, and Rollback
@@ -163,8 +180,8 @@ OpenJarvis explicitly distinguishes between process supervision and operating-sy
 ### Running Test Verification
 To verify the complete test suite locally:
 ```powershell
-# 1. Run full Python security test suites (161 tests)
-uv run python -m unittest tests/security/test_final_acceptance_gates.py tests/security/test_final_security_architecture.py tests/security/test_consolidated_security_corrections.py tests/security/test_consolidated_security_remediation.py tests/security/test_apply_patch_policy_propagation.py
+# 1. Run full Python security and diagnostics test suites (183 tests)
+uv run python -m unittest tests/security/test_final_security_architecture.py tests/security/test_consolidated_security_corrections.py tests/security/test_final_acceptance_blockers_release.py tests/security/test_final_acceptance_gates.py tests/security/test_consolidated_security_remediation.py tests/security/test_apply_patch_policy_propagation.py tests/tools/test_windows_security_diagnostics.py
 
 # 2. Run full Rust workspace test suite (74 tests)
 cargo test --manifest-path rust/Cargo.toml --workspace --locked

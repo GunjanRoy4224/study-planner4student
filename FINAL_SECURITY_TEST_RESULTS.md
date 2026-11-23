@@ -17,9 +17,11 @@ All security test suites and Rust workspace crate tests pass with zero failures 
 | `tests/security/test_final_acceptance_gates.py` | `unittest` | 27 | 27 | 0 | 0 | ~5.10s |
 | `tests/security/test_final_security_architecture.py` | `unittest` | 30 | 30 | 0 | 0 | ~0.50s |
 | `tests/security/test_consolidated_security_corrections.py` | `unittest` | 81 | 81 | 0 | 0 | ~27.80s |
+| `tests/security/test_final_acceptance_blockers_release.py` | `unittest` | 14 | 14 | 0 | 0 | ~14.20s |
 | `tests/security/test_consolidated_security_remediation.py` | `unittest` | 16 | 16 | 0 | 0 | ~1.50s |
 | `tests/security/test_apply_patch_policy_propagation.py` | `unittest` | 7 | 7 | 0 | 0 | ~11.50s |
-| **Combined Python Security Suite** | `unittest` | **161** | **161** | **0** | **0** | **55.65s** |
+| `tests/tools/test_windows_security_diagnostics.py` | `unittest` | 8 | 8 | 0 | 0 | ~3.30s |
+| **Combined Python Security Suite** | `unittest` | **183** | **183** | **0** | **0** | **63.91s** |
 | `openjarvis-security` (Rust) | `cargo test` | 1 | 1 | 0 | 0 | <0.01s |
 | `openjarvis-tools` (Rust) | `cargo test` | 2 | 2 | 0 | 0 | <0.01s |
 | `openjarvis-learning` (Rust) | `cargo test` | 51 | 51 | 0 | 0 | 0.25s |
@@ -27,7 +29,7 @@ All security test suites and Rust workspace crate tests pass with zero failures 
 | `openjarvis-traces` (Rust) | `cargo test` | 3 | 3 | 0 | 0 | <0.01s |
 | `openjarvis-a2a` (Rust) | `cargo test` | 8 | 8 | 0 | 0 | <0.01s |
 | **Combined Rust Workspace** | `cargo test` | **74** | **74** | **0** | **0** | **1.71s build + 0.26s run** |
-| **GRAND TOTAL ALL TESTS** | | **235** | **235** | **0** | **0** | **Pass (100%)** |
+| **GRAND TOTAL ALL TESTS** | | **257** | **257** | **0** | **0** | **Pass (100%)** |
 
 ---
 
@@ -35,19 +37,19 @@ All security test suites and Rust workspace crate tests pass with zero failures 
 
 ### Command
 ```powershell
-uv run python -m unittest tests/security/test_final_acceptance_gates.py tests/security/test_final_security_architecture.py tests/security/test_consolidated_security_corrections.py tests/security/test_consolidated_security_remediation.py tests/security/test_apply_patch_policy_propagation.py
+uv run python -m unittest tests/security/test_final_security_architecture.py tests/security/test_consolidated_security_corrections.py tests/security/test_final_acceptance_blockers_release.py tests/security/test_final_acceptance_gates.py tests/security/test_consolidated_security_remediation.py tests/security/test_apply_patch_policy_propagation.py tests/tools/test_windows_security_diagnostics.py
 ```
 
 ### Complete Output
 ```text
-..................Failed to register mandatory browser network guard: DevTools route protocol failed
-..MCP schema mutated for tool 'query_db': approved=6ca1f3ca71a527b9f3515a2f77d4db6459abdae1beb1d6e3b9e89d7aeb2fefac, current=65e83e44823edaf2e92c371cb22cd82f455feea617344ececa2a48cb62871783
+.....................................................................................................................Mandatory audit logging failed for consequential tool 'file_write': disk I/O error
+.....Corrupted MCP trust storage encountered; resetting: Expecting value: line 1 column 1 (char 0)
+....................Failed to register mandatory browser network guard: DevTools route protocol failed
+..MCP schema mutated or unverified for tool 'query_db': approved=None, persisted=None, current=65e83e44823edaf2e92c371cb22cd82f455feea617344ececa2a48cb62871783
 .....Taint declassification: removed label 'secret' with reason: User confirmed public export
-.........................................................................................Failed to persist approved MCP schema hash: [Errno 13] Permission denied: 'C:\Users\gunjan\.openjarvis\mcp_trust.json'
-..Failed to persist approved MCP schema hash: [Errno 13] Permission denied: 'C:\Users\gunjan\.openjarvis\mcp_trust.json'
-.............................................
+..................................
 ----------------------------------------------------------------------
-Ran 161 tests in 55.647s
+Ran 183 tests in 63.913s
 
 OK
 ```
@@ -128,3 +130,29 @@ test result: ok. 74 passed; 0 failed; 0 ignored
 ### Gate 6: Scheduler & Audit Integrity (`test_final_acceptance_gates.py`)
 - `test_scheduler_profile_restricts_autonomous_escalation`: Scheduled tasks run under `"scheduler"` capability profile and cannot execute unsanctioned code.
 - `test_declassification_is_persistently_audited`: Declassifications are persistently logged to SQLite with cryptographic hash chain verification.
+
+### Gate 7: Final Blocker Corrections & Deep Integration (`test_final_acceptance_blockers_release.py`)
+- `test_browser_type_hmac_binding_and_redaction`: Action summary and store payload replace typing text with `[REDACTED INPUT]` while binding HMAC digest.
+- `test_browser_type_toctou_mutation_rejected`: Replaces element attributes or typing text before execution, verifying execution aborts.
+- `test_browser_click_toctou_mutation_rejected`: Mutates target `formaction` attribute between approval and click, preventing execution.
+- `test_browser_proxy_semaphore_rejects_with_503`: Demonstrates proxy rejects excess concurrent connections with HTTP 503 rather than unbounded queuing.
+- `test_browser_proxy_socket_tracking_and_close`: Verifies active socket tracking and full socket closure on proxy `stop()`.
+- `test_docker_rejects_unapproved_network_mode`: Verifies Docker execution rejects `NetworkMode="bridge"` when only `none` is approved.
+- `test_docker_rejects_unapproved_writable_mount`: Rejects container with unapproved writable mount and fails closed when allowlist is empty.
+- `test_docker_socket_mount_rejected_before_empty_allowlist_check`: Verifies Docker daemon socket mounts trigger immediate specific rejection.
+- `test_mcp_schema_atomic_persistence`: Proves atomic `replace` writes to schema trust file with zero partial-write corruption.
+- `test_mcp_schema_corrupted_json_recovery`: Gracefully resets corrupted JSON storage without unhandled exception.
+- `test_mcp_unapproved_tool_requires_confirmation`: Reconstructs adapter without approved hash; requires confirmation despite constructor arguments.
+- `test_code_interpreter_untrusted_windows_requires_docker`: Untrusted arbitrary code execution fails closed on Windows when Docker is unavailable.
+- `test_code_interpreter_trusted_host_job_object`: Explicit `trusted=True` or `allow_host_job_object=True` runs under Job Object with honest metadata.
+- `test_consequential_tool_fails_closed_on_audit_failure`: Consequential tools fail closed with security error if mandatory audit recording throws.
+
+### Gate 8: Windows Security Diagnostics (`test_windows_security_diagnostics.py`)
+- `test_tool_registration`: Verifies `windows_security_diagnostics` is in registered tool modules.
+- `test_tool_spec`: Confirms parameter schema, actions (`inspect_defender`, `scan_defender`, `inspect_firewall`, `inspect_system`, `audit_utilities`, `remediate`), and `requires_confirmation=False` default.
+- `test_inspect_defender`: Inspects Windows Defender status and threats safely.
+- `test_scan_defender`: Triggers QuickScan safely.
+- `test_inspect_firewall`: Audits Domain, Private, and Public firewall profiles and block status.
+- `test_audit_utilities`: Audits Sysinternals, MSERT, and ClamAV free utility presence and integrity.
+- `test_remediation_dry_run`: Executes remediation action requiring approval.
+- `test_policy_engine_evaluates_diagnostics`: Proves read-only actions are `ALLOW` and remediation actions are `REQUIRE_APPROVAL`.
