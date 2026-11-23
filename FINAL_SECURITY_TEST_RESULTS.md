@@ -1,10 +1,11 @@
 # OpenJarvis — Final Security Test Execution Results
 
-**Date:** 2026-11-23  
+**Date:** 2026-11-24  
 **Repository:** [D:/Jarvis/OpenJarvis](file:///D:/Jarvis/OpenJarvis)  
 **Base Commit:** `c05ebe99e524a269a08d017ce3730a436ab4c46b`  
+**Current HEAD SHA:** `6ffce09f`  
 **Release Branch:** `release-v0.3.0-rc1`  
-**Environment:** Windows 11 (x86_64), Python 3.12 (via uv), Rust 1.89+ (cargo locked), RTX 3050 Laptop GPU
+**Environment:** Windows 11 (x86_64), Python 3.12 (via uv), Rust 1.89+ (cargo locked), NVIDIA GeForce RTX 3050 Laptop GPU
 
 ---
 
@@ -20,8 +21,8 @@ All security test suites and Rust workspace crate tests pass with zero failures 
 | `tests/security/test_final_acceptance_blockers_release.py` | `unittest` | 14 | 14 | 0 | 0 | ~14.20s |
 | `tests/security/test_consolidated_security_remediation.py` | `unittest` | 16 | 16 | 0 | 0 | ~1.50s |
 | `tests/security/test_apply_patch_policy_propagation.py` | `unittest` | 7 | 7 | 0 | 0 | ~11.50s |
-| `tests/tools/test_windows_security_diagnostics.py` | `unittest` | 8 | 8 | 0 | 0 | ~3.30s |
-| **Combined Python Security Suite** | `unittest` | **183** | **183** | **0** | **0** | **63.91s** |
+| `tests/tools/test_windows_security_diagnostics.py` | `unittest` | 9 | 9 | 0 | 0 | ~3.30s |
+| **Combined Python Security Suite** | `unittest` | **184** | **184** | **0** | **0** | **65.53s** |
 | `openjarvis-security` (Rust) | `cargo test` | 1 | 1 | 0 | 0 | <0.01s |
 | `openjarvis-tools` (Rust) | `cargo test` | 2 | 2 | 0 | 0 | <0.01s |
 | `openjarvis-learning` (Rust) | `cargo test` | 51 | 51 | 0 | 0 | 0.25s |
@@ -29,7 +30,7 @@ All security test suites and Rust workspace crate tests pass with zero failures 
 | `openjarvis-traces` (Rust) | `cargo test` | 3 | 3 | 0 | 0 | <0.01s |
 | `openjarvis-a2a` (Rust) | `cargo test` | 8 | 8 | 0 | 0 | <0.01s |
 | **Combined Rust Workspace** | `cargo test` | **74** | **74** | **0** | **0** | **1.71s build + 0.26s run** |
-| **GRAND TOTAL ALL TESTS** | | **257** | **257** | **0** | **0** | **Pass (100%)** |
+| **GRAND TOTAL ALL TESTS** | | **258** | **258** | **0** | **0** | **Pass (100%)** |
 
 ---
 
@@ -42,14 +43,14 @@ uv run python -m unittest tests/security/test_final_security_architecture.py tes
 
 ### Complete Output
 ```text
-.....................................................................................................................Mandatory audit logging failed for consequential tool 'file_write': disk I/O error
+......................................................................................................................Mandatory audit logging failed for consequential tool 'file_write': disk I/O error
 .....Corrupted MCP trust storage encountered; resetting: Expecting value: line 1 column 1 (char 0)
 ....................Failed to register mandatory browser network guard: DevTools route protocol failed
 ..MCP schema mutated or unverified for tool 'query_db': approved=None, persisted=None, current=65e83e44823edaf2e92c371cb22cd82f455feea617344ececa2a48cb62871783
 .....Taint declassification: removed label 'secret' with reason: User confirmed public export
 ..................................
 ----------------------------------------------------------------------
-Ran 183 tests in 63.913s
+Ran 184 tests in 65.534s
 
 OK
 ```
@@ -135,6 +136,7 @@ test result: ok. 74 passed; 0 failed; 0 ignored
 - `test_browser_type_hmac_binding_and_redaction`: Action summary and store payload replace typing text with `[REDACTED INPUT]` while binding HMAC digest.
 - `test_browser_type_toctou_mutation_rejected`: Replaces element attributes or typing text before execution, verifying execution aborts.
 - `test_browser_click_toctou_mutation_rejected`: Mutates target `formaction` attribute between approval and click, preventing execution.
+- `test_browser_click_duplicate_approval_eliminated_when_pep_approved`: Verifies that when PEP has already obtained explicit user approval (`_pep_approved=True`), duplicate callback prompts are completely eliminated while post-approval TOCTOU DOM revalidation remains active.
 - `test_browser_proxy_semaphore_rejects_with_503`: Demonstrates proxy rejects excess concurrent connections with HTTP 503 rather than unbounded queuing.
 - `test_browser_proxy_socket_tracking_and_close`: Verifies active socket tracking and full socket closure on proxy `stop()`.
 - `test_docker_rejects_unapproved_network_mode`: Verifies Docker execution rejects `NetworkMode="bridge"` when only `none` is approved.
@@ -148,11 +150,25 @@ test result: ok. 74 passed; 0 failed; 0 ignored
 - `test_consequential_tool_fails_closed_on_audit_failure`: Consequential tools fail closed with security error if mandatory audit recording throws.
 
 ### Gate 8: Windows Security Diagnostics (`test_windows_security_diagnostics.py`)
-- `test_tool_registration`: Verifies `windows_security_diagnostics` is in registered tool modules.
-- `test_tool_spec`: Confirms parameter schema, actions (`inspect_defender`, `scan_defender`, `inspect_firewall`, `inspect_system`, `audit_utilities`, `remediate`), and `requires_confirmation=False` default.
-- `test_inspect_defender`: Inspects Windows Defender status and threats safely.
-- `test_scan_defender`: Triggers QuickScan safely.
-- `test_inspect_firewall`: Audits Domain, Private, and Public firewall profiles and block status.
-- `test_audit_utilities`: Audits Sysinternals, MSERT, and ClamAV free utility presence and integrity.
-- `test_remediation_dry_run`: Executes remediation action requiring approval.
+- `test_registration_and_spec`: Verifies `windows_security_diagnostics` is registered in `ToolRegistry` with parameters and capabilities.
+- `test_defender_status`: Inspects Windows Defender status and threats safely.
+- `test_defender_scan`: Triggers QuickScan safely.
+- `test_firewall_status`: Audits Domain, Private, and Public firewall profiles and block status.
+- `test_system_inspection`: Audits active processes, listening TCP/UDP ports, and startup persistence registry keys.
+- `test_check_utilities`: Audits Sysinternals, MSERT, and ClamAV free utility presence and integrity.
+- `test_remediation_dry_run`: Tests remediation logic path.
+- `test_remediation_requires_approval`: Confirms remediation requires human confirmation.
 - `test_policy_engine_evaluates_diagnostics`: Proves read-only actions are `ALLOW` and remediation actions are `REQUIRE_APPROVAL`.
+
+---
+
+## 5. Live Runtime Host Verification Reality
+
+To eliminate any ambiguity between automated unit/mock test results and live environment capabilities, runtime probes were executed directly against the Windows 11 host:
+
+| Runtime Subsystem | Target Subsystem / API | Host Probe Result | Verified Status | Resolution / Action Required |
+|---|---|---|---|---|
+| **Windows Job Objects** | Win32 `kernel32.dll` & `ntdll.dll` Job Objects (`CREATE_SUSPENDED`, `IsProcessInJob`, `NtResumeProcess`) | `job_sandbox = WindowsJobSandbox(max_memory_bytes=100*1024*1024)` -> Handle 372 acquired; `run_sandboxed("echo HostJobObjectVerified")` returned `stdout="HostJobObjectVerified"`, `isolation_type="job_object"`, `returncode=0`. | **VERIFIED PASS (Host Verified)** | Fully operational on host. Provides genuine process supervision. |
+| **Windows Security Diagnostics** | `WindowsSecurityDiagnosticsTool` executing host cmdlets & utilities inspection | Real processes, PIDs, memory usage, and CPU times enumerated; free utility audit checked Sysinternals/MSERT/ClamAV locations. | **VERIFIED PASS (Host Verified)** | Fully operational on host. Autonomous read-only diagnostics active. |
+| **Docker Engine Sandbox** | Named pipe `//./pipe/docker_engine` | Docker CLI `29.1.3` installed, but daemon connection returned: `failed to connect to the docker API at npipe:////./pipe/docker_engine: The system cannot find the file specified`. | **NOT VERIFIED (Host Docker daemon offline)** | Unit inspection tests pass. For live container sandboxing, start Docker Desktop on the host. Until then, untrusted code execution safely fails closed. |
+| **Playwright Chromium Automation** | `playwright.async_api.async_playwright` | Python module lookup returned `ModuleNotFoundError: No module named 'playwright'`. | **NOT VERIFIED (Playwright package not installed)** | Unit and route protocol mocks pass. For live browser automation, install Playwright package: `uv sync --extra browser`. |

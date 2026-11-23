@@ -1,9 +1,11 @@
 # OpenJarvis — Final Security Architecture and Implementation Report
 
-**Release Status:** Production-Ready Release Candidate (`release-v0.3.0-rc1`)  
-**Date:** 2026-11-23  
+**Release Status:** CONDITIONALLY ACCEPTED (Release Candidate `v0.3.0-rc1` Code & Tests Complete; Host Docker & Playwright Daemons Offline)  
+**Date:** 2026-11-24  
 **Repository:** [D:/Jarvis/OpenJarvis](file:///D:/Jarvis/OpenJarvis)  
 **Base Commit:** `c05ebe99e524a269a08d017ce3730a436ab4c46b`  
+**Current HEAD SHA:** `6ffce09f`  
+**Active Branch:** `release-v0.3.0-rc1`  
 **Target Environment:** Windows 11 (x86_64), Python 3.12, Ollama with `qwen3.5:4b`, NVIDIA GeForce RTX 3050 Laptop GPU, 16 GB RAM  
 **Acceptance Matrix:** [FINAL_ACCEPTANCE_MATRIX.md](file:///D:/Jarvis/OpenJarvis/FINAL_ACCEPTANCE_MATRIX.md)  
 **Patch Deliverable:** [FINAL_SECURITY_IMPLEMENTATION.diff](file:///D:/Jarvis/OpenJarvis/FINAL_SECURITY_IMPLEMENTATION.diff)  
@@ -154,6 +156,7 @@ OpenJarvis explicitly distinguishes between process supervision and operating-sy
 
 ### Gate 7: Final Blocker Corrections & Deep Integration
 - **Browser Approval Integrity & TOCTOU:** Text typed into browser inputs is bound via HMAC SHA-256 (`compute_typing_hmac`) and scrubbed (`[REDACTED INPUT]`) in approval storage and user summaries. Pre-execution DOM revalidation confirms tag name, type, action, method, and text digest immediately prior to execution, blocking time-of-check to time-of-use element replacement.
+- **Duplicate Browser Prompt Elimination:** Resolved duplicate approval mechanism. When `ToolExecutor` and PolicyEngine obtain explicit user confirmation (`_pep_approved=True`), tools bypass redundant secondary confirmation prompts while strictly preserving post-approval TOCTOU DOM revalidation.
 - **SSRF Proxy Bounded Resources:** Non-blocking semaphore acquisition (`acquire(blocking=False)`) prevents thread pool exhaustion and queues. Concurrency violations return bounded HTTP 503 Service Unavailable. Active sockets are tracked and actively closed on proxy shutdown.
 - **Docker Mount & Network Restriction:** Default network mode is `none` (rejects `bridge` unless approved). Default mounts are read-only; writable mounts require explicit `_APPROVED_WRITABLE_MOUNTS` allowlist. Empty allowlist fails closed when mounts are requested. Sensitive directories and Docker daemon sockets trigger immediate rejection before allowlist checks.
 - **MCP Schema Trust Persistence:** Schema fingerprints are written atomically via temporary files and `os.replace`. Storage corruption resets gracefully. Unapproved tools or mutating keywords strictly require user confirmation, preventing constructor overrides. Secret-tainted parameters are blocked before execution.
@@ -171,16 +174,17 @@ OpenJarvis explicitly distinguishes between process supervision and operating-sy
 
 ---
 
-## 6. Verification, Installation, and Rollback
+## 6. Verification, Installation, and Safe Recovery
 
 ### Release Branch & Verification
 - **Active Release Branch:** `release-v0.3.0-rc1`
 - **Base Commit:** `c05ebe99e524a269a08d017ce3730a436ab4c46b`
+- **Current HEAD SHA:** `6ffce09f`
 
 ### Running Test Verification
 To verify the complete test suite locally:
 ```powershell
-# 1. Run full Python security and diagnostics test suites (183 tests)
+# 1. Run full Python security and diagnostics test suites (184 tests)
 uv run python -m unittest tests/security/test_final_security_architecture.py tests/security/test_consolidated_security_corrections.py tests/security/test_final_acceptance_blockers_release.py tests/security/test_final_acceptance_gates.py tests/security/test_consolidated_security_remediation.py tests/security/test_apply_patch_policy_propagation.py tests/tools/test_windows_security_diagnostics.py
 
 # 2. Run full Rust workspace test suite (74 tests)
@@ -196,10 +200,19 @@ git apply --check FINAL_SECURITY_IMPLEMENTATION.diff
 git apply FINAL_SECURITY_IMPLEMENTATION.diff
 ```
 
-### Rollback Procedure
-If rollback to the base commit is required:
+### Safe Backup & Recovery Procedure (Non-Destructive)
+To preserve all local modifications and untracked files safely without destructive resets (`git reset --hard` or `git clean -fd` are prohibited):
+
 ```powershell
+# 1. Create a safe backup branch and patch of all current work:
+$timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+git branch "backup-user-work-$timestamp"
+git diff HEAD > "backup_modifications_$timestamp.patch"
+
+# 2. Cleanly revert the release changes using patch reverse-application:
+git apply --check --reverse FINAL_SECURITY_IMPLEMENTATION.diff
+git apply --reverse FINAL_SECURITY_IMPLEMENTATION.diff
+
+# 3. Alternatively, switch to any prior commit safely without altering untracked files:
 git checkout c05ebe99e524a269a08d017ce3730a436ab4c46b
-git reset --hard HEAD
-git clean -fd
 ```

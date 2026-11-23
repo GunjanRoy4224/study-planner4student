@@ -22,9 +22,11 @@ This document details all test suites present across the Python and Rust codebas
 | `tests/security/test_final_acceptance_gates.py` | Python (`unittest`) | 27 | **ACTUALLY EXECUTED** | **27 Passed, 0 Failed** | ~5.10s |
 | `tests/security/test_final_security_architecture.py` | Python (`unittest`) | 30 | **ACTUALLY EXECUTED** | **30 Passed, 0 Failed** | ~0.50s |
 | `tests/security/test_consolidated_security_corrections.py` | Python (`unittest`) | 81 | **ACTUALLY EXECUTED** | **81 Passed, 0 Failed** | ~27.80s |
+| `tests/security/test_final_acceptance_blockers_release.py` | Python (`unittest`) | 14 | **ACTUALLY EXECUTED** | **14 Passed, 0 Failed** | ~14.20s |
 | `tests/security/test_consolidated_security_remediation.py` | Python (`unittest`) | 16 | **ACTUALLY EXECUTED** | **16 Passed, 0 Failed** | ~1.50s |
 | `tests/security/test_apply_patch_policy_propagation.py` | Python (`unittest`) | 7 | **ACTUALLY EXECUTED** | **7 Passed, 0 Failed** | ~11.50s |
-| **Subtotal Python Security Suites** | Python (`uv run`) | **161** | **ALL 161 EXECUTED** | **161 Passed, 0 Failed** | **55.65s** |
+| `tests/tools/test_windows_security_diagnostics.py` | Python (`unittest`) | 9 | **ACTUALLY EXECUTED** | **9 Passed, 0 Failed** | ~3.30s |
+| **Subtotal Python Security Suites** | Python (`uv run`) | **184** | **ALL 184 EXECUTED** | **184 Passed, 0 Failed** | **65.53s** |
 | `rust/crates/openjarvis-security` | Rust (`cargo test`) | 1 | **ACTUALLY EXECUTED** | **1 Passed, 0 Failed** | <0.01s |
 | `rust/crates/openjarvis-tools` | Rust (`cargo test`) | 2 | **ACTUALLY EXECUTED** | **2 Passed, 0 Failed** | <0.01s |
 | `rust/crates/openjarvis-learning` | Rust (`cargo test`) | 51 | **ACTUALLY EXECUTED** | **51 Passed, 0 Failed** | 0.25s |
@@ -32,7 +34,7 @@ This document details all test suites present across the Python and Rust codebas
 | `rust/crates/openjarvis-traces` | Rust (`cargo test`) | 3 | **ACTUALLY EXECUTED** | **3 Passed, 0 Failed** | <0.01s |
 | `rust/crates/openjarvis-a2a` | Rust (`cargo test`) | 8 | **ACTUALLY EXECUTED** | **8 Passed, 0 Failed** | <0.01s |
 | **Subtotal Rust Workspace** | Rust (`cargo test`) | **74** | **ALL 74 EXECUTED** | **74 Passed, 0 Failed** | **1.97s** |
-| **GRAND TOTAL EXECUTED** | | **235** | **ALL 235 EXECUTED** | **235 Passed, 0 Failed** | **57.62s** |
+| **GRAND TOTAL EXECUTED** | | **258** | **ALL 258 EXECUTED** | **258 Passed, 0 Failed** | **67.50s** |
 
 ---
 
@@ -67,7 +69,7 @@ The following test suites exist in the working tree and were inspected for cover
 
 ### 1. Python Security Suite Execution Command
 ```powershell
-uv run python -m unittest tests/security/test_final_acceptance_gates.py tests/security/test_final_security_architecture.py tests/security/test_consolidated_security_corrections.py tests/security/test_consolidated_security_remediation.py tests/security/test_apply_patch_policy_propagation.py
+uv run python -m unittest tests/security/test_final_security_architecture.py tests/security/test_consolidated_security_corrections.py tests/security/test_final_acceptance_blockers_release.py tests/security/test_final_acceptance_gates.py tests/security/test_consolidated_security_remediation.py tests/security/test_apply_patch_policy_propagation.py tests/tools/test_windows_security_diagnostics.py
 ```
 
 ### 2. Rust Workspace Test Execution Command
