@@ -3,9 +3,9 @@
 **Date:** 2026-11-24  
 **Repository:** [D:/Jarvis/OpenJarvis](file:///D:/Jarvis/OpenJarvis)  
 **Base Commit:** `c05ebe99e524a269a08d017ce3730a436ab4c46b`  
-**Current HEAD SHA:** `6ffce09f`  
+**Current HEAD SHA:** `acfdf7d2aa17afb7771ae2202d75070e01c3e62c`  
 **Branch:** `release-v0.3.0-rc1`  
-**System Release Status:** CONDITIONALLY ACCEPTED (Code & Test Complete; Host Docker & Playwright Daemons Offline)
+**System Release Status:** CONDITIONALLY ACCEPTED (Code & Test Complete; Host Docker Daemon Offline; Windows Job Object Supervision Active; Ollama Local-Only Offline Fail-Closed)
 
 ---
 

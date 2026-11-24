@@ -2241,4 +2241,3 @@ tests/traces/test_types.py
 tests/workflow/test_condition_safe_eval.py
 tests/workflow/test_workflow.py
 uv.lock
-vs_BuildTools.exe

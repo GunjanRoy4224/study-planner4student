@@ -1,10 +1,10 @@
 # OpenJarvis — Final Security Architecture and Implementation Report
 
-**Release Status:** CONDITIONALLY ACCEPTED (Release Candidate `v0.3.0-rc1` Code & Tests Complete; Host Docker & Playwright Daemons Offline)  
+**Release Status:** CONDITIONALLY ACCEPTED (Release Candidate `v0.3.0-rc1` Code & Tests Complete; Host Docker Daemon Offline; Windows Job Object Supervision Active; Ollama Local-Only Offline Fail-Closed)  
 **Date:** 2026-11-24  
 **Repository:** [D:/Jarvis/OpenJarvis](file:///D:/Jarvis/OpenJarvis)  
 **Base Commit:** `c05ebe99e524a269a08d017ce3730a436ab4c46b`  
-**Current HEAD SHA:** `6ffce09f`  
+**Current HEAD SHA:** `acfdf7d2aa17afb7771ae2202d75070e01c3e62c`  
 **Active Branch:** `release-v0.3.0-rc1`  
 **Target Environment:** Windows 11 (x86_64), Python 3.12, Ollama with `qwen3.5:4b`, NVIDIA GeForce RTX 3050 Laptop GPU, 16 GB RAM  
 **Acceptance Matrix:** [FINAL_ACCEPTANCE_MATRIX.md](file:///D:/Jarvis/OpenJarvis/FINAL_ACCEPTANCE_MATRIX.md)  

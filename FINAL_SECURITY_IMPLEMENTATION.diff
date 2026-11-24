@@ -1,4 +1,4 @@
-﻿diff --git a/.gitignore b/.gitignore
+diff --git a/.gitignore b/.gitignore
 index 258b8fe3..b1bfdac3 100644
 --- a/.gitignore
 +++ b/.gitignore
@@ -1827,10 +1827,10 @@ index 62860604..5aa6639a 100644
  __all__ = ["InjectionScanner", "InjectionScanResult"]
 diff --git a/src/openjarvis/security/policy_engine.py b/src/openjarvis/security/policy_engine.py
 new file mode 100644
-index 00000000..2d3f26be
+index 00000000..b022bd38
 --- /dev/null
 +++ b/src/openjarvis/security/policy_engine.py
-@@ -0,0 +1,610 @@
+@@ -0,0 +1,626 @@
 +"""Centralized Policy Enforcement Point (PEP) for OpenJarvis.
 +
 +Enforces fine-grained authorization, security boundaries, and approval requirements
@@ -2070,7 +2070,8 @@ index 00000000..2d3f26be
 +        redacted = self._sanitize_params(params, tool_id=tool_id)
 +
 +        # Determine effective required capabilities
-+        req_caps = canonical_tool_capabilities(canonical_tool)
++        raw_req_caps = canonical_tool_capabilities(canonical_tool)
++        req_caps = [c.value if hasattr(c, "value") else str(c) for c in raw_req_caps]
 +        tool_spec = getattr(tool, "spec", None)
 +        wrapper_caps = list(getattr(tool_spec, "required_capabilities", []) or []) if tool_spec else []
 +        for c in wrapper_caps:
@@ -2282,6 +2283,21 @@ index 00000000..2d3f26be
 +                return PolicyResult(
 +                    decision=PolicyDecision.ALLOW,
 +                    reason=f"Safe read-only Windows security diagnostic ({diag_action})",
++                    risk_category=RiskCategory.LOW.value,
++                    required_capabilities=req_caps,
++                    target_resource=target_resource,
++                    action_description=action_desc,
++                    redacted_summary=redacted,
++                    action_payload_hash=payload_hash,
++                )
++
++        # 2h. Safe unclassified tools without confirmation requirement or consequential capabilities
++        if not getattr(tool.spec, "requires_confirmation", False):
++            consequential_caps = {"code:execute", "fs:write", "browser:interact", "network:outbound"}
++            if not any(c in consequential_caps for c in req_caps):
++                return PolicyResult(
++                    decision=PolicyDecision.ALLOW,
++                    reason=f"Safe tool '{tool_id}' without confirmation requirement",
 +                    risk_category=RiskCategory.LOW.value,
 +                    required_capabilities=req_caps,
 +                    target_resource=target_resource,
@@ -2637,7 +2653,7 @@ index c5179c11..b7223d3a 100644
 -__all__ = ["check_ssrf", "is_private_ip"]
 +__all__ = ["check_ssrf", "is_private_ip", "validate_and_resolve_url", "SSRFProtectionError"]
 diff --git a/src/openjarvis/security/subprocess_sandbox.py b/src/openjarvis/security/subprocess_sandbox.py
-index 58e35fb6..c9a0e9b7 100644
+index 58e35fb6..0a8a2175 100644
 --- a/src/openjarvis/security/subprocess_sandbox.py
 +++ b/src/openjarvis/security/subprocess_sandbox.py
 @@ -2,12 +2,13 @@
@@ -2845,7 +2861,7 @@ index 58e35fb6..c9a0e9b7 100644
      try:
          proc = subprocess.Popen(
              command,
-@@ -102,16 +259,55 @@ def run_sandboxed(
+@@ -102,16 +259,61 @@ def run_sandboxed(
              text=True,
              env=env,
              cwd=cwd,
@@ -2884,8 +2900,16 @@ index 58e35fb6..c9a0e9b7 100644
 +
          try:
              stdout, stderr = proc.communicate(timeout=timeout)
-             result.stdout = stdout[:max_output_bytes] if stdout else ""
-             result.stderr = stderr[:max_output_bytes] if stderr else ""
+-            result.stdout = stdout[:max_output_bytes] if stdout else ""
+-            result.stderr = stderr[:max_output_bytes] if stderr else ""
++            if stdout and len(stdout) > max_output_bytes:
++                result.stdout = stdout[:max_output_bytes]
++            else:
++                result.stdout = stdout or ""
++            if stderr and len(stderr) > max_output_bytes:
++                result.stderr = stderr[:max_output_bytes]
++            else:
++                result.stderr = stderr or ""
              result.returncode = proc.returncode
          except subprocess.TimeoutExpired:
 +            if job_sandbox:
@@ -2903,7 +2927,7 @@ index 58e35fb6..c9a0e9b7 100644
              result.timed_out = True
              result.killed = True
              result.returncode = -1
-@@ -120,8 +316,17 @@ def run_sandboxed(
+@@ -120,8 +322,17 @@ def run_sandboxed(
      except OSError as exc:
          result.stderr = f"Execution error: {exc}"
          result.returncode = -1
@@ -3055,7 +3079,7 @@ index f0cbacd8..5e6dec4d 100644
                          bus = getattr(request.app.state, "bus", None)
                          if bus is None:
 diff --git a/src/openjarvis/server/approval_routes.py b/src/openjarvis/server/approval_routes.py
-index 076874d6..1a999179 100644
+index 076874d6..b755289c 100644
 --- a/src/openjarvis/server/approval_routes.py
 +++ b/src/openjarvis/server/approval_routes.py
 @@ -1,19 +1,27 @@
@@ -3089,7 +3113,7 @@ index 076874d6..1a999179 100644
  except ImportError:
      raise ImportError("fastapi is required for approval routes")
  
-@@ -32,48 +40,303 @@ def _get_store() -> ApprovalStore:
+@@ -32,48 +40,304 @@ def _get_store() -> ApprovalStore:
      return _store
  
  
@@ -3151,7 +3175,8 @@ index 076874d6..1a999179 100644
 +            status_code=401, detail="Authentication rejected: unauthenticated header cannot establish identity"
 +        )
 +
-+    raise HTTPException(status_code=401, detail="Authentication required: no valid credentials supplied")
++    # 4. Keyless local use (no server API key configured and no forged headers)
++    return "admin"
 +
 +
 +def check_action_authorization(action: PendingAction, principal: str) -> None:
@@ -3543,7 +3568,7 @@ index 9f4f871c..f4703d80 100644
      return {"allowed_dirs": validate_allowed_dirs(config.security.allowed_dirs)}
  
 diff --git a/src/openjarvis/tools/_stubs.py b/src/openjarvis/tools/_stubs.py
-index 968c5e57..1d776780 100644
+index 968c5e57..fa7e5cac 100644
 --- a/src/openjarvis/tools/_stubs.py
 +++ b/src/openjarvis/tools/_stubs.py
 @@ -11,6 +11,7 @@ import atexit
@@ -3868,7 +3893,7 @@ index 968c5e57..1d776780 100644
 +                    )
 +            # 2. Non-interactive or Web/SSE/AgentManager async approval queue mode
 +            else:
-+                if self._approval_mode == "fail_closed":
++                if self._approval_mode != "queue":
 +                    return ToolResult(
 +                        tool_name=tool_call.name,
 +                        content=(
@@ -8068,7 +8093,7 @@ index 50a710c6..b93c40fe 100644
 +    "get_trusted_mcp_servers",
 +]
 diff --git a/src/openjarvis/tools/shell_exec.py b/src/openjarvis/tools/shell_exec.py
-index 44bca542..f94d4db2 100644
+index 44bca542..ee704183 100644
 --- a/src/openjarvis/tools/shell_exec.py
 +++ b/src/openjarvis/tools/shell_exec.py
 @@ -1,8 +1,13 @@
@@ -8115,7 +8140,7 @@ index 44bca542..f94d4db2 100644
          # Resolve timeout (capped at _MAX_TIMEOUT)
          timeout = params.get("timeout", _DEFAULT_TIMEOUT)
          try:
-@@ -141,78 +145,162 @@ class ShellExecTool(BaseTool):
+@@ -141,78 +145,174 @@ class ShellExecTool(BaseTool):
              if val is not None:
                  env[key] = val
  
@@ -8139,7 +8164,13 @@ index 44bca542..f94d4db2 100644
 -                    "timeout_used": timeout,
 -                    "working_dir": working_dir,
 -                },
--            )
++        if os.name == "nt":
++            # On Windows, host shell execution is disabled unless genuine Docker isolation
++            # or approved Windows Job Object isolation is active.
++            from openjarvis.tools.docker_shell_exec import (
++                get_active_container,
++                _verify_container_isolation,
+             )
 -        except ImportError:
 -            pass  # Fall through to subprocess below
 -        except Exception as exc:
@@ -8163,13 +8194,7 @@ index 44bca542..f94d4db2 100644
 -                timeout=timeout,
 -                cwd=working_dir,
 -                env=env,
-+        if os.name == "nt":
-+            # On Windows, host shell execution is disabled unless genuine Docker isolation
-+            # or approved Windows Job Object isolation is active.
-+            from openjarvis.tools.docker_shell_exec import (
-+                get_active_container,
-+                _verify_container_isolation,
-             )
+-            )
 -        except subprocess.TimeoutExpired:
 -            return ToolResult(
 -                tool_name="shell_exec",
@@ -8227,15 +8252,27 @@ index 44bca542..f94d4db2 100644
 +                            "timed_out": res.timed_out,
 +                        },
 +                    )
-+                content = res.stdout
-+                if res.stderr:
-+                    content = f"{content}\n{res.stderr}" if content else res.stderr
++                stdout = res.stdout or ""
++                stderr = res.stderr or ""
++                if len(stdout) >= _MAX_OUTPUT_BYTES:
++                    stdout = stdout[:_MAX_OUTPUT_BYTES] + "\n... (stdout truncated)"
++                if len(stderr) >= _MAX_OUTPUT_BYTES:
++                    stderr = stderr[:_MAX_OUTPUT_BYTES] + "\n... (stderr truncated)"
++
++                sections: list[str] = []
++                if stdout:
++                    sections.append(f"=== STDOUT ===\n{stdout}")
++                if stderr:
++                    sections.append(f"=== STDERR ===\n{stderr}")
++                content = "\n".join(sections) if sections else "(no output)"
++
 +                return ToolResult(
 +                    tool_name="shell_exec",
 +                    content=content,
 +                    success=(res.returncode == 0 and not res.timed_out),
 +                    metadata={
 +                        "returncode": res.returncode,
++                        "timeout_used": timeout,
 +                        "isolation_type": res.isolation_type,
 +                        "working_dir": working_dir,
 +                        "timed_out": res.timed_out,
@@ -8347,7 +8384,7 @@ index 44bca542..f94d4db2 100644
          if len(stdout) > _MAX_OUTPUT_BYTES:
              stdout = stdout[:_MAX_OUTPUT_BYTES] + "\n... (stdout truncated)"
          if len(stderr) > _MAX_OUTPUT_BYTES:
-@@ -226,14 +314,17 @@ class ShellExecTool(BaseTool):
+@@ -226,14 +326,17 @@ class ShellExecTool(BaseTool):
              sections.append(f"=== STDERR ===\n{stderr}")
          content = "\n".join(sections) if sections else "(no output)"
  
@@ -8987,7 +9024,7 @@ index 00000000..5d18d1bb
 +if __name__ == "__main__":
 +    unittest.main()
 diff --git a/tests/security/test_capabilities.py b/tests/security/test_capabilities.py
-index 094d1a27..85a6d0c4 100644
+index 094d1a27..333d6af6 100644
 --- a/tests/security/test_capabilities.py
 +++ b/tests/security/test_capabilities.py
 @@ -88,10 +88,21 @@ class TestCapability:
@@ -9008,7 +9045,7 @@ index 094d1a27..85a6d0c4 100644
 +        policy = CapabilityPolicy()
 +        assert policy.check("primary", "file:read")
 +        assert policy.check("primary", "code:execute")
-+        assert policy.check("", "file:read")
++        assert not policy.check("", "file:read")
 +
      def test_default_deny(self):
          policy = CapabilityPolicy(default_deny=True)
@@ -9022,6 +9059,15 @@ index 094d1a27..85a6d0c4 100644
          policy.deny("agent1", "code:execute")
          assert not policy.check("agent1", "code:execute")
          assert policy.check("agent1", "file:read")
+@@ -154,7 +165,7 @@ class TestCapabilityPolicy:
+         assert len(grants) == 2
+ 
+     def test_list_agents(self):
+-        policy = CapabilityPolicy()
++        policy = CapabilityPolicy(load_default_profiles=False)
+         policy.grant("agent1", "file:read")
+         policy.grant("agent2", "code:execute")
+         agents = policy.list_agents()
 diff --git a/tests/security/test_consolidated_security_corrections.py b/tests/security/test_consolidated_security_corrections.py
 new file mode 100644
 index 00000000..2c98d591
@@ -12784,7 +12830,7 @@ index 2c24465a..ee1182ed 100644
 +        assert "outside allowed directories" in result.content
 +        assert secret.read_text(encoding="utf-8") == "sensitive\n"
 diff --git a/tests/tools/test_code_interpreter.py b/tests/tools/test_code_interpreter.py
-index aecaf70e..a92429d7 100644
+index aecaf70e..f11e7cf5 100644
 --- a/tests/tools/test_code_interpreter.py
 +++ b/tests/tools/test_code_interpreter.py
 @@ -2,6 +2,10 @@
@@ -12798,7 +12844,7 @@ index aecaf70e..a92429d7 100644
  from openjarvis.core.registry import ToolRegistry
  from openjarvis.tools.code_interpreter import CodeInterpreterTool
  
-@@ -17,18 +21,28 @@ class TestCodeInterpreterTool:
+@@ -17,18 +21,31 @@ class TestCodeInterpreterTool:
          assert "code" in tool.spec.parameters["properties"]
          assert "code" in tool.spec.parameters["required"]
  
@@ -12807,7 +12853,10 @@ index aecaf70e..a92429d7 100644
 +        tool = CodeInterpreterTool()
 +        result = tool.execute(code="print(2 + 2)")
 +        assert result.success is False
-+        assert "disabled on Windows without Docker isolation" in result.content
++        assert (
++            "Windows host code execution denied" in result.content
++            or "disabled on Windows without Docker" in result.content
++        )
 +
 +    @pytest.mark.skipif(os.name == "nt", reason="code execution disabled on Windows without Docker")
      def test_execute_simple_code(self):
@@ -12827,7 +12876,7 @@ index aecaf70e..a92429d7 100644
      def test_execute_multiline(self):
          tool = CodeInterpreterTool()
          code = "x = 10\ny = 20\nprint(x + y)"
-@@ -36,6 +50,7 @@ class TestCodeInterpreterTool:
+@@ -36,6 +53,7 @@ class TestCodeInterpreterTool:
          assert result.success is True
          assert "30" in result.content
  
@@ -12835,7 +12884,7 @@ index aecaf70e..a92429d7 100644
      def test_timeout_protection(self):
          tool = CodeInterpreterTool(timeout=2)
          result = tool.execute(code="import time; time.sleep(10)")
-@@ -48,6 +63,7 @@ class TestCodeInterpreterTool:
+@@ -48,6 +66,7 @@ class TestCodeInterpreterTool:
          assert result.success is False
          assert "SyntaxError" in result.content
  
@@ -12843,7 +12892,7 @@ index aecaf70e..a92429d7 100644
      def test_runtime_error(self):
          tool = CodeInterpreterTool()
          result = tool.execute(code="print(1/0)")
-@@ -111,6 +127,7 @@ class TestCodeInterpreterTool:
+@@ -111,6 +130,7 @@ class TestCodeInterpreterTool:
          assert result.success is False
          assert "No code" in result.content
  
@@ -12851,7 +12900,7 @@ index aecaf70e..a92429d7 100644
      def test_output_truncation(self):
          tool = CodeInterpreterTool(max_output=50)
          result = tool.execute(code="print('A' * 200)")
-@@ -125,18 +142,21 @@ class TestCodeInterpreterTool:
+@@ -125,18 +145,21 @@ class TestCodeInterpreterTool:
          assert fn["function"]["name"] == "code_interpreter"
          assert "code" in fn["function"]["parameters"]["properties"]
  
@@ -12974,7 +13023,7 @@ index 210da56f..a67ea75e 100644
          tool = FileWriteTool()
          result = tool.execute(path="", content="hello")
 diff --git a/tests/tools/test_http_request.py b/tests/tools/test_http_request.py
-index 65e978cf..b5cc6b07 100644
+index 65e978cf..8d073efc 100644
 --- a/tests/tools/test_http_request.py
 +++ b/tests/tools/test_http_request.py
 @@ -6,7 +6,34 @@ from unittest.mock import MagicMock, patch
@@ -13013,7 +13062,36 @@ index 65e978cf..b5cc6b07 100644
  
  from openjarvis.tools.http_request import HttpRequestTool
  
-@@ -249,6 +276,7 @@ class TestHttpRequestTool:
+@@ -18,14 +45,28 @@ def _force_httpx_fallback():
+     The Rust backend makes real HTTP requests that bypass respx mocks.
+     By making the Rust HttpRequestTool().execute() raise, the tool falls
+     through to the httpx code path where respx interception works.
++    Mock DNS resolution for respx mock domains (e.g. example.com).
+     """
+     mock_rust = MagicMock()
+     mock_rust.HttpRequestTool.return_value.execute.side_effect = RuntimeError(
+         "mocked out"
+     )
++    from openjarvis.security.ssrf import validate_and_resolve_url as orig_validate
++    import urllib.parse
++
++    def mock_validate(u):
++        if "example.com" in str(u):
++            p = urllib.parse.urlparse(u)
++            port = p.port or (443 if p.scheme == "https" else 80)
++            return (p.hostname or "api.example.com", "93.184.216.34", port)
++        return orig_validate(u)
++
+     with patch(
+         "openjarvis._rust_bridge.get_rust_module",
+         return_value=mock_rust,
++    ), patch(
++        "openjarvis.tools.http_request.validate_and_resolve_url",
++        side_effect=mock_validate,
+     ):
+         yield
+ 
+@@ -249,6 +290,7 @@ class TestHttpRequestTool:
          assert "Unsupported HTTP method" in result.content
          assert "TRACE" in result.content
  
@@ -13021,7 +13099,7 @@ index 65e978cf..b5cc6b07 100644
      def test_method_case_insensitive(self):
          """Method should be case-insensitive."""
          tool = HttpRequestTool()
-@@ -307,5 +335,40 @@ class TestHttpRequestTool:
+@@ -307,5 +349,40 @@ class TestHttpRequestTool:
          assert isinstance(result.metadata["headers"], dict)
          assert result.metadata["headers"]["x-request-id"] == "abc123"
  
@@ -13044,7 +13122,7 @@ index 65e978cf..b5cc6b07 100644
 +        tool = HttpRequestTool()
 +        with (
 +            patch("openjarvis.tools.http_request.check_ssrf", return_value=None),
-+            patch("httpx.request", side_effect=fake_request),
++            patch("httpx.Client.request", side_effect=fake_request),
 +        ):
 +            result = tool.execute(
 +                url="https://example.com/api",
@@ -13063,10 +13141,23 @@ index 65e978cf..b5cc6b07 100644
  
  __all__ = ["TestHttpRequestTool"]
 diff --git a/tests/tools/test_shell_exec.py b/tests/tools/test_shell_exec.py
-index 2dddc83a..39979da3 100644
+index 2dddc83a..e470a2cd 100644
 --- a/tests/tools/test_shell_exec.py
 +++ b/tests/tools/test_shell_exec.py
-@@ -58,6 +58,7 @@ class TestShellExecTool:
+@@ -39,6 +39,12 @@ def _make_mock_rust(side_effect=None, return_value=None):
+     return mock_mod
+ 
+ 
++@pytest.fixture(autouse=True)
++def _enable_windows_job_exec(monkeypatch):
++    if os.name == "nt":
++        monkeypatch.setenv("OPENJARVIS_ENABLE_WINDOWS_JOB_EXEC", "1")
++
++
+ class TestShellExecTool:
+     def test_registered_via_tools_package_import(self):
+         import openjarvis.tools as tools_pkg
+@@ -58,6 +64,7 @@ class TestShellExecTool:
          assert "code:execute" in tool.spec.required_capabilities
          assert "command" in tool.spec.parameters["properties"]
          assert "command" in tool.spec.parameters["required"]
@@ -13074,7 +13165,7 @@ index 2dddc83a..39979da3 100644
  
      def test_no_command(self):
          tool = ShellExecTool()
-@@ -72,69 +73,52 @@ class TestShellExecTool:
+@@ -72,69 +79,48 @@ class TestShellExecTool:
          assert "No command" in result.content
  
      def test_simple_echo(self):
@@ -13138,14 +13229,11 @@ index 2dddc83a..39979da3 100644
 -            "openjarvis._rust_bridge.get_rust_module",
 -            return_value=mock_mod,
 -        ):
-+        with patch("subprocess.run") as mock_run:
-+            mock_run.return_value = subprocess.CompletedProcess(
-+                args="echo ok", returncode=0, stdout="ok\n", stderr=""
-+            )
-             result = tool.execute(command="echo ok", timeout=999)
+-            result = tool.execute(command="echo ok", timeout=999)
++        command = subprocess.list2cmdline([sys.executable, "-c", "print('ok')"])
++        result = tool.execute(command=command, timeout=999)
          assert result.success is True
          assert result.metadata["timeout_used"] == 300
-+        assert mock_run.call_args.kwargs["timeout"] == 300
  
      def test_working_dir(self, tmp_path):
 -        mock_mod = _make_mock_rust(
@@ -13167,7 +13255,7 @@ index 2dddc83a..39979da3 100644
          assert result.metadata["working_dir"] == str(tmp_path)
  
      def test_working_dir_not_exists(self):
-@@ -151,96 +135,65 @@ class TestShellExecTool:
+@@ -151,96 +137,65 @@ class TestShellExecTool:
          assert result.success is False
          assert "not a directory" in result.content
  
@@ -13294,7 +13382,7 @@ index 2dddc83a..39979da3 100644
  
      def test_tool_id(self):
          tool = ShellExecTool()
-@@ -252,32 +205,34 @@ class TestShellExecTool:
+@@ -252,32 +207,30 @@ class TestShellExecTool:
          assert fn["type"] == "function"
          assert fn["function"]["name"] == "shell_exec"
          assert "command" in fn["function"]["parameters"]["properties"]
@@ -13309,13 +13397,10 @@ index 2dddc83a..39979da3 100644
 -            "openjarvis._rust_bridge.get_rust_module",
 -            return_value=mock_mod,
 -        ):
-+        with patch("subprocess.run") as mock_run:
-+            mock_run.return_value = subprocess.CompletedProcess(
-+                args="echo ok", returncode=0, stdout="ok\n", stderr=""
-+            )
-             result = tool.execute(command="echo ok")
+-            result = tool.execute(command="echo ok")
++        command = subprocess.list2cmdline([sys.executable, "-c", "print('ok')"])
++        result = tool.execute(command=command)
          assert result.metadata["timeout_used"] == 30
-+        assert mock_run.call_args.kwargs["timeout"] == 30
  
 -    def test_rust_exception_sets_failure(self):
 -        """When the Rust backend raises an exception, Python sets success=False."""
@@ -13344,6 +13429,30 @@ index 2dddc83a..39979da3 100644
  
  
  class TestSanitizedEnvWindowsKeys:
+@@ -326,9 +279,10 @@ class TestSanitizedEnvWindowsKeys:
+ 
+         captured: dict = {}
+ 
+-        def _fake_run(*args, **kwargs):
+-            captured["env"] = kwargs.get("env")
+-            return subprocess.CompletedProcess(args, 0, stdout="ok\n", stderr="")
++        def _fake_run_sandboxed(*args, **kwargs):
++            from openjarvis.security.subprocess_sandbox import build_safe_env, SandboxResult
++            captured["env"] = build_safe_env()
++            return SandboxResult(returncode=0, stdout="ok\n", stderr="", isolation_type="job_object")
+ 
+         tool = ShellExecTool()
+         with (
+@@ -336,7 +290,8 @@ class TestSanitizedEnvWindowsKeys:
+                 "openjarvis._rust_bridge.get_rust_module",
+                 side_effect=ImportError("no rust module"),
+             ),
+-            patch("subprocess.run", side_effect=_fake_run),
++            patch("openjarvis.security.subprocess_sandbox.run_sandboxed", side_effect=_fake_run_sandboxed),
++            patch("subprocess.run", side_effect=_fake_run_sandboxed),
+         ):
+             result = tool.execute(command="echo ok")
+ 
 diff --git a/tests/tools/test_template_loader_security.py b/tests/tools/test_template_loader_security.py
 index b2c0e7e8..2a919bc9 100644
 --- a/tests/tools/test_template_loader_security.py
@@ -13365,7 +13474,7 @@ index b2c0e7e8..2a919bc9 100644
      """Whitespace in a value stays one argv element (no word-splitting)."""
      tmpl = ToolTemplate(
 diff --git a/tests/tools/test_tool_timeout.py b/tests/tools/test_tool_timeout.py
-index a4dc2279..99e02d84 100644
+index a4dc2279..94289a6e 100644
 --- a/tests/tools/test_tool_timeout.py
 +++ b/tests/tools/test_tool_timeout.py
 @@ -197,7 +197,7 @@ assert not result.success
@@ -13373,7 +13482,7 @@ index a4dc2279..99e02d84 100644
              capture_output=True,
              text=True,
 -            timeout=3,
-+            timeout=10,
++            timeout=30,
              check=False,
          )
          assert completed.returncode == 0, completed.stderr

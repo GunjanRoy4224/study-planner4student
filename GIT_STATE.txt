@@ -9,10 +9,11 @@ Git information is used ONLY to describe the current state and record difference
 
 --------------------------------------------------------------------------------
 Local Branch:          release-v0.3.0-rc1
-HEAD Commit SHA:       8c343360aaafdea705c4c62ff7592b5c43516397
-HEAD Commit Subject:   release: v0.3.0-rc1 final closure, reconciled matrix, and runtime gates
-Release Tag:           v0.3.0-rc1
-System Release Status: CONDITIONALLY ACCEPTED (Host Docker & Playwright Offline)
+Base Commit SHA:       c05ebe99e524a269a08d017ce3730a436ab4c46b
+HEAD Commit SHA:       ee49af989602799dcae2434d7daf3d9a9993f5ac
+HEAD Commit Subject:   docs(release): synchronize v0.3.0-rc1 acceptance matrix, reports, test results, and diff
+Release Tag:           v0.3.0-rc1 (points to commit 5fbba95257aaf7135816d98f6c0e27960c157311)
+System Release Status: CONDITIONALLY ACCEPTED (Host Docker Daemon Offline; Windows Job Object Process Supervision Active & Verified; Ollama Local-Only Offline Fail-Closed)
 --------------------------------------------------------------------------------
 
 CURRENT WORKING TREE STATUS:
